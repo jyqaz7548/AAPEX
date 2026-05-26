@@ -4,3 +4,8 @@ coverage/
 .env
 .env.local
 *.log
+
+# React Native - 네이버맵 클라이언트 ID 포함 파일 (절대 커밋 금지)
+mobile/android/app/src/main/res/values/strings.xml
+mobile/ios/MoveSync/Info.plist
+mobile/ios/Pods/
