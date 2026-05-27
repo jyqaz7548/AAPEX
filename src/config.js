@@ -9,7 +9,8 @@ const defaultCitsBaseUrl =
 export const config = {
   citsApiKey: process.env.CITS_API_KEY,
   citsBaseUrl: process.env.CITS_BASE_URL ?? defaultCitsBaseUrl,
-  port: Number.parseInt(process.env.PORT ?? "4000", 10)
+  port: Number.parseInt(process.env.PORT ?? "4000", 10),
+  naverMapsClientId: process.env.NAVER_MAPS_CLIENT_ID ?? ""
 };
 
 function loadEnvFile(path) {

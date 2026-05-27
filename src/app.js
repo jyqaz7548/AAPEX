@@ -1,87 +1,97 @@
 import { createServer as createHttpServer } from "node:http";
 import { config } from "./config.js";
-import { CitsClient, CitsUpstreamError } from "./services/citsClient.js";
-import { normalizePedestrianSignals } from "./services/citsNormalizer.js";
+import { getAllSignals, getSignalById } from "./services/signalsStore.js";
+import { buildMapHtml } from "./services/mapHtml.js";
+import { calculateRemaining, updateCycle } from "./services/cycleCalculator.js";
 
 export const createServer = (appConfig = config) => {
-  const client = new CitsClient(appConfig);
+  const mapHtml = buildMapHtml(appConfig.naverMapsClientId ?? config.naverMapsClientId ?? "");
 
   return createHttpServer(async (request, response) => {
     try {
-      await routeRequest(request, response, client);
+      await routeRequest(request, response, mapHtml);
     } catch (error) {
       writeJson(response, 500, {
-        error: {
-          code: "INTERNAL_SERVER_ERROR",
-          message: error.message
-        }
+        error: { code: "INTERNAL_SERVER_ERROR", message: error.message }
       });
     }
   });
 };
 
-const routeRequest = async (request, response, client) => {
+const readBody = (req) => new Promise((resolve, reject) => {
+  let data = "";
+  req.on("data", chunk => { data += chunk; });
+  req.on("end", () => { try { resolve(JSON.parse(data)); } catch { resolve({}); } });
+  req.on("error", reject);
+});
+
+const routeRequest = async (request, response, mapHtml) => {
   const url = new URL(request.url ?? "/", "http://localhost");
+
+  if (request.method === "OPTIONS") {
+    response.writeHead(204, {
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET,POST,OPTIONS",
+      "access-control-allow-headers": "content-type"
+    });
+    response.end();
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/map") {
+    response.writeHead(200, {
+      "content-type": "text/html; charset=utf-8",
+      "access-control-allow-origin": "*"
+    });
+    response.end(mapHtml);
+    return;
+  }
 
   if (request.method === "GET" && url.pathname === "/health") {
     writeJson(response, 200, { ok: true });
     return;
   }
 
-  const rawMatch = url.pathname.match(/^\/api\/cits\/signals\/([^/]+)\/raw$/);
-  if (request.method === "GET" && rawMatch) {
-    await handleCitsRequest(response, async () => {
-      const data = await client.fetchSignalPhaseTiming(rawMatch[1]);
-      writeJson(response, 200, data);
-    });
+  if (request.method === "GET" && url.pathname === "/api/signals") {
+    writeJson(response, 200, { signals: getAllSignals() });
     return;
   }
 
-  const remainingMatch = url.pathname.match(
-    /^\/api\/cits\/signals\/([^/]+)\/remaining$/
-  );
+  const remainingMatch = url.pathname.match(/^\/api\/signals\/([^/]+)\/remaining$/);
   if (request.method === "GET" && remainingMatch) {
-    await handleCitsRequest(response, async () => {
-      const data = await client.fetchSignalPhaseTiming(remainingMatch[1]);
-      writeJson(response, 200, {
-        itstId: remainingMatch[1],
-        signals: normalizePedestrianSignals(data),
-        fetchedAt: new Date().toISOString()
-      });
-    });
-    return;
-  }
-
-  writeJson(response, 404, {
-    error: {
-      code: "NOT_FOUND",
-      message: "Route not found"
-    }
-  });
-};
-
-const handleCitsRequest = async (response, handler) => {
-  try {
-    await handler();
-  } catch (error) {
-    if (error instanceof CitsUpstreamError) {
-      writeJson(response, error.statusCode, {
-        error: {
-          code: error.code,
-          message: error.message,
-          upstreamStatus: error.upstreamStatus
-        }
-      });
+    const itstId = remainingMatch[1];
+    const result = calculateRemaining(itstId);
+    if (!result) {
+      writeJson(response, 404, { error: { code: "SIGNAL_NOT_FOUND", message: "등록된 신호 주기가 없습니다" } });
       return;
     }
-
-    throw error;
+    const sig = getSignalById(itstId);
+    writeJson(response, 200, {
+      itstId,
+      ...(sig ? { name: sig.name, lat: sig.lat, lng: sig.lng } : {}),
+      cycleInfo: { cycleSeconds: result.cycleSeconds, greenSeconds: result.greenSeconds },
+      signals: [{ direction: "pedestrian", statusName: result.status, remainingSeconds: result.remainingSeconds, unavailable: false }],
+      fetchedAt: new Date().toISOString()
+    });
+    return;
   }
+
+  const cycleMatch = url.pathname.match(/^\/api\/signals\/([^/]+)\/cycle$/);
+  if (request.method === "POST" && cycleMatch) {
+    const itstId = cycleMatch[1];
+    const body = await readBody(request);
+    updateCycle(itstId, body);
+    writeJson(response, 200, { ok: true });
+    return;
+  }
+
+  writeJson(response, 404, { error: { code: "NOT_FOUND", message: "Route not found" } });
 };
 
 export const writeJson = (response, statusCode, body) => {
   response.writeHead(statusCode, {
-    "content-type": "application/json; charset=utf-8"
+    "content-type": "application/json; charset=utf-8",
+    "access-control-allow-origin": "*"
   });
   response.end(JSON.stringify(body));
 };
