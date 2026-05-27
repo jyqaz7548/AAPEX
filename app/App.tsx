@@ -1,42 +1,105 @@
-import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
-import { StyleSheet, View, TouchableOpacity, Text, SafeAreaView } from 'react-native';
+import React, { useRef, useState } from 'react';
+import {
+  View, StyleSheet, Animated, PanResponder, Dimensions, StatusBar,
+} from 'react-native';
 import { WebView } from 'react-native-webview';
 import HomeScreen from './screens/HomeScreen';
 import { MAP_URL } from './constants';
 
-const PURPLE = '#5B4FE9';
+const { height: H } = Dimensions.get('window');
+const EXPANDED_TOP = 80;
+const COLLAPSED_TOP = H - 220;
 
 export default function App() {
-  const [showMap, setShowMap] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const isExpanded = useRef(false);
+  const scrollY = useRef(0);
 
-  if (showMap) {
-    return (
-      <View style={styles.container}>
-        <StatusBar style="dark" />
-        <SafeAreaView style={styles.mapHeader}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => setShowMap(false)}>
-            <Text style={styles.backTxt}>← 홈</Text>
-          </TouchableOpacity>
-        </SafeAreaView>
-        <WebView
-          source={{ uri: MAP_URL }}
-          style={styles.webview}
-          originWhitelist={['*']}
-          allowsInlineMediaPlayback
-          javaScriptEnabled
-        />
-      </View>
-    );
-  }
+  // top을 직접 애니메이션 → 레이아웃이 실제로 이동 → 터치 영역도 함께 이동
+  const sheetTop = useRef(new Animated.Value(COLLAPSED_TOP)).current;
+  const curTop = useRef(COLLAPSED_TOP);
 
-  return <HomeScreen onOpenMap={() => setShowMap(true)} />;
+  const snapTo = (target: number) => {
+    const exp = target === EXPANDED_TOP;
+    curTop.current = target;
+    isExpanded.current = exp;
+    setExpanded(exp);
+    Animated.spring(sheetTop, {
+      toValue: target,
+      useNativeDriver: false, // top은 layout 속성 → native driver 불가
+      tension: 65,
+      friction: 11,
+    }).start();
+  };
+
+  const panResponder = useRef(PanResponder.create({
+    // 접힘 상태: 시트 어디서나 스와이프 캡처 (capture = ScrollView보다 먼저)
+    onMoveShouldSetPanResponderCapture: (_, { dy }) =>
+      !isExpanded.current && Math.abs(dy) > 8,
+    // 펼침 상태: 스크롤 최상단에서 아래로 당기면 접기
+    onMoveShouldSetPanResponder: (_, { dy }) =>
+      isExpanded.current && dy > 10 && scrollY.current <= 0,
+    onPanResponderGrant: () => {
+      sheetTop.setOffset(curTop.current);
+      sheetTop.setValue(0);
+    },
+    onPanResponderMove: (_, { dy }) => {
+      const min = EXPANDED_TOP - curTop.current;
+      const max = COLLAPSED_TOP - curTop.current;
+      sheetTop.setValue(Math.max(min, Math.min(max, dy)));
+    },
+    onPanResponderRelease: (_, { dy, vy }) => {
+      sheetTop.flattenOffset();
+      const curr = Math.max(EXPANDED_TOP, Math.min(COLLAPSED_TOP, curTop.current + dy));
+      const mid = (EXPANDED_TOP + COLLAPSED_TOP) / 2;
+      const goExpand = vy < -0.5 || (Math.abs(vy) < 0.5 && curr < mid);
+      snapTo(goExpand ? EXPANDED_TOP : COLLAPSED_TOP);
+    },
+  })).current;
+
+  return (
+    <View style={styles.root}>
+      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+      <WebView
+        source={{ uri: MAP_URL }}
+        style={StyleSheet.absoluteFill}
+        javaScriptEnabled
+        allowsInlineMediaPlayback
+        originWhitelist={['*']}
+      />
+      {/* top 애니메이션 → 접힘 시 layout이 하단만 차지 → 지도 터치 통과 */}
+      <Animated.View style={[styles.sheet, { top: sheetTop }]}>
+        <View style={styles.inner} {...panResponder.panHandlers}>
+          <View style={styles.handleWrap}>
+            <View style={styles.handle} />
+          </View>
+          <HomeScreen
+            scrollEnabled={expanded}
+            onScroll={(y) => { scrollY.current = y; }}
+          />
+        </View>
+      </Animated.View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  mapHeader: { backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  backBtn: { paddingHorizontal: 16, paddingVertical: 10 },
-  backTxt: { fontSize: 16, color: PURPLE, fontWeight: '600' },
-  webview: { flex: 1 },
+  root: { flex: 1 },
+  sheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 12,
+  },
+  inner: { flex: 1 },
+  handleWrap: { paddingTop: 10, paddingBottom: 6, alignItems: 'center' },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#d1d5db' },
 });

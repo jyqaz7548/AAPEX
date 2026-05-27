@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, SafeAreaView, StatusBar, Modal,
+  ScrollView, Modal,
 } from 'react-native';
 import { API_BASE_URL } from '../constants';
 
@@ -15,9 +15,12 @@ const fmt = (sec: number): string => {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 };
 
-interface Props { onOpenMap: () => void; }
+interface Props {
+  scrollEnabled: boolean;
+  onScroll: (y: number) => void;
+}
 
-export default function HomeScreen({ onOpenMap }: Props) {
+export default function HomeScreen({ scrollEnabled, onScroll }: Props) {
   const [signals, setSignals] = useState<Signal[]>([]);
   const [phases, setPhases] = useState<Record<string, PhaseInfo>>({});
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
@@ -53,7 +56,7 @@ export default function HomeScreen({ onOpenMap }: Props) {
               },
             }));
           }
-        } catch { /* network error – keep previous state */ }
+        } catch { /* keep previous */ }
       }
     };
     poll();
@@ -62,15 +65,19 @@ export default function HomeScreen({ onOpenMap }: Props) {
   }, [signals]);
 
   const toggleFav = (id: string) =>
-    setFavorites(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    setFavorites(prev => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
 
   const favSignals = signals.filter(s => favorites.has(s.itstId));
 
-  const renderSignalRows = (sig: Signal) => {
+  const renderRows = (sig: Signal) => {
     const p = phases[sig.itstId];
     return (
-      <View key={sig.itstId} style={styles.signalBlock}>
-        <Text style={styles.signalName}>{sig.name}</Text>
+      <View key={sig.itstId} style={styles.sigBlock}>
+        <Text style={styles.sigName}>{sig.name}</Text>
         <View style={[styles.row, p?.isGreen && styles.rowActive]}>
           <View style={[styles.dot, styles.dotGreen]} />
           <Text style={styles.rowLabel}>초록불 남은 시간</Text>
@@ -86,19 +93,26 @@ export default function HomeScreen({ onOpenMap }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={PURPLE} />
-
+    <View style={styles.container}>
+      {/* Fixed header — always visible even when sheet is collapsed */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>MoveSync</Text>
+        <Text style={styles.title}>MoveSync</Text>
       </View>
-
       <View style={styles.locBar}>
         <Text style={styles.locLabel}>현재 위치</Text>
         <Text style={styles.locAddr}>일원역 사거리</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      {/* Scrollable signal cards */}
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        scrollEnabled={scrollEnabled}
+        scrollEventThrottle={16}
+        onScroll={(e) => onScroll(e.nativeEvent.contentOffset.y)}
+        bounces={false}
+        overScrollMode="never"
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.card}>
           <View style={styles.cardHead}>
             <Text style={styles.cardTitle}>근처 신호등</Text>
@@ -106,7 +120,7 @@ export default function HomeScreen({ onOpenMap }: Props) {
           </View>
           {signals.length === 0
             ? <Text style={styles.empty}>신호등 정보를 불러오는 중...</Text>
-            : signals.map(renderSignalRows)}
+            : signals.map(renderRows)}
         </View>
 
         <View style={styles.card}>
@@ -116,18 +130,13 @@ export default function HomeScreen({ onOpenMap }: Props) {
           </View>
           {favSignals.length === 0
             ? <Text style={styles.empty}>즐겨찾기한 신호등이 없습니다</Text>
-            : favSignals.map(renderSignalRows)}
+            : favSignals.map(renderRows)}
         </View>
-      </ScrollView>
 
-      <View style={styles.bottom}>
-        <TouchableOpacity style={styles.btnPrimary} onPress={onOpenMap}>
-          <Text style={styles.btnPrimaryTxt}>지도 보기</Text>
-        </TouchableOpacity>
         <TouchableOpacity style={styles.btnSecondary} onPress={() => setShowFavModal(true)}>
           <Text style={styles.btnSecondaryTxt}>신호등 즐겨찾기 추가</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
 
       <Modal visible={showFavModal} transparent animationType="fade" onRequestClose={() => setShowFavModal(false)}>
         <View style={styles.overlay}>
@@ -145,41 +154,40 @@ export default function HomeScreen({ onOpenMap }: Props) {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  header: { backgroundColor: PURPLE, paddingVertical: 16, alignItems: 'center' },
-  headerTitle: { color: '#fff', fontSize: 22, fontWeight: '700' },
-  locBar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  locLabel: { fontSize: 15, color: '#333' },
-  locAddr: { fontSize: 15, color: '#666' },
-  scroll: { padding: 16, gap: 14 },
-  card: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 12, padding: 16 },
-  cardHead: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  cardTitle: { fontSize: 15, fontWeight: '600', color: '#111' },
-  cardCount: { fontSize: 15, color: '#888' },
-  signalBlock: { marginBottom: 4 },
-  signalName: { fontSize: 12, color: '#999', marginBottom: 2 },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 10, borderRadius: 8, paddingHorizontal: 4 },
+  container: { flex: 1 },
+  header: { backgroundColor: PURPLE, paddingVertical: 14, alignItems: 'center' },
+  title: { color: '#fff', fontSize: 20, fontWeight: '700' },
+  locBar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  locLabel: { fontSize: 14, color: '#333' },
+  locAddr: { fontSize: 14, color: '#666' },
+  scroll: { padding: 14, gap: 12, paddingBottom: 36 },
+  card: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 12, padding: 14 },
+  cardHead: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  cardTitle: { fontSize: 14, fontWeight: '600', color: '#111' },
+  cardCount: { fontSize: 14, color: '#888' },
+  sigBlock: { marginBottom: 4 },
+  sigName: { fontSize: 11, color: '#aaa', marginBottom: 2 },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, gap: 10, borderRadius: 8, paddingHorizontal: 4 },
   rowActive: { backgroundColor: '#f9fafb' },
-  dot: { width: 18, height: 18, borderRadius: 9 },
+  dot: { width: 16, height: 16, borderRadius: 8 },
   dotGreen: { backgroundColor: '#22c55e' },
   dotRed: { backgroundColor: '#ef4444' },
   rowLabel: { flex: 1, fontSize: 14, color: '#333' },
-  rowTime: { fontSize: 17, fontWeight: '700', color: '#111' },
+  rowTime: { fontSize: 16, fontWeight: '700', color: '#111' },
   empty: { fontSize: 13, color: '#aaa', paddingVertical: 6 },
-  bottom: { padding: 16, paddingBottom: 28, gap: 10, borderTopWidth: 1, borderTopColor: '#e5e7eb' },
-  btnPrimary: { backgroundColor: PURPLE, borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  btnPrimaryTxt: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  btnSecondary: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, paddingVertical: 14, alignItems: 'center' },
-  btnSecondaryTxt: { color: '#333', fontSize: 16 },
+  btnSecondary: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, paddingVertical: 13, alignItems: 'center' },
+  btnSecondaryTxt: { color: '#333', fontSize: 15 },
+  btnPrimary: { backgroundColor: PURPLE, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  btnPrimaryTxt: { color: '#fff', fontSize: 15, fontWeight: '600' },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 },
   modal: { backgroundColor: '#fff', borderRadius: 16, padding: 20 },
-  modalTitle: { fontSize: 17, fontWeight: '700', marginBottom: 12 },
+  modalTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
   favRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
-  favName: { fontSize: 15, color: '#111' },
+  favName: { fontSize: 14, color: '#111' },
   favStar: { fontSize: 20, color: PURPLE },
 });

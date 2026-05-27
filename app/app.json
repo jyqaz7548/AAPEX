@@ -1,19 +1,26 @@
 {
   "expo": {
-    "name": "app",
-    "slug": "app",
+    "name": "MoveSync",
+    "slug": "movesync-aapex",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/fea46ea1-5d16-4533-a9e5-7988e98aa8f8"
+    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.movesync.aapex"
     },
     "android": {
       "adaptiveIcon": {
@@ -21,10 +28,16 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.movesync.aapex"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "fea46ea1-5d16-4533-a9e5-7988e98aa8f8"
+      }
     }
   }
 }
