@@ -42,6 +42,25 @@ export const buildMapHtml = (clientId) => `<!DOCTYPE html>
     .toast{position:fixed;bottom:calc(80px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);
       background:#111;color:#fff;padding:8px 16px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
     .toast.show{opacity:1}
+    #fab{position:fixed;bottom:calc(24px + env(safe-area-inset-bottom,0px));right:16px;
+      width:52px;height:52px;border-radius:50%;background:#007AFF;color:#fff;border:none;
+      font-size:28px;box-shadow:0 4px 12px rgba(0,0,0,.25);cursor:pointer;z-index:100;
+      display:flex;align-items:center;justify-content:center;transition:background .2s;line-height:1}
+    #fab.cancel{background:#ef4444}
+    #place-hint{position:fixed;top:16px;left:50%;transform:translateX(-50%);
+      background:#111;color:#fff;padding:8px 18px;border-radius:20px;font-size:13px;
+      display:none;z-index:100;pointer-events:none;white-space:nowrap}
+    #dim{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:150;display:none}
+    #name-dialog{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+      background:#fff;border-radius:16px;padding:20px;width:284px;z-index:200;
+      box-shadow:0 8px 32px rgba(0,0,0,.2);display:none}
+    #name-dialog p{font-size:15px;font-weight:700;color:#111;margin-bottom:8px}
+    #sig-name{width:100%;padding:9px 10px;border:1px solid #d1d5db;border-radius:8px;
+      font-size:15px;margin-bottom:12px;box-sizing:border-box}
+    .dlg-row{display:flex;gap:8px}
+    .dlg-btn{flex:1;padding:10px 0;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+    .dlg-ok{background:#007AFF;color:#fff}
+    .dlg-cancel{background:#e5e7eb;color:#333}
   </style>
 </head>
 <body>
@@ -75,10 +94,31 @@ export const buildMapHtml = (clientId) => `<!DOCTYPE html>
 </div>
 <div class="toast" id="toast"></div>
 
+<button id="fab" onclick="togglePlace()">+</button>
+<div id="place-hint">📍 지도를 탭해 위치 선택</div>
+<div id="dim" onclick="cancelPlace()"></div>
+<div id="name-dialog">
+  <p>🚦 신호등 이름</p>
+  <input id="sig-name" type="text" placeholder="예: 강남역 1번 출구 횡단보도" />
+  <div class="dlg-row">
+    <button class="dlg-btn dlg-cancel" onclick="cancelPlace()">취소</button>
+    <button class="dlg-btn dlg-ok" onclick="confirmPlace()">추가</button>
+  </div>
+</div>
+
 <script>
   let currentId=null, refreshTimer=null, cycleInfo={cycleSeconds:170,greenSeconds:40};
+  let placing=false, pendingCoord=null;
 
   const map=new naver.maps.Map('map',{center:new naver.maps.LatLng(37.48327,127.0838),zoom:16,mapDataControl:false,scaleControl:false});
+
+  naver.maps.Event.addListener(map,'click',function(e){
+    if(!placing)return;
+    pendingCoord=e.coord;
+    document.getElementById('sig-name').value='';
+    document.getElementById('name-dialog').style.display='block';
+    document.getElementById('dim').style.display='block';
+  });
 
   async function init(){
     const r=await fetch('/api/signals');
@@ -96,6 +136,37 @@ export const buildMapHtml = (clientId) => `<!DOCTYPE html>
         openPanel(sig);
       }
     });
+  }
+
+  function togglePlace(){
+    placing=!placing;
+    const fab=document.getElementById('fab');
+    fab.textContent=placing?'✕':'+';
+    fab.className=placing?'cancel':'';
+    document.getElementById('place-hint').style.display=placing?'block':'none';
+    if(!placing){document.getElementById('name-dialog').style.display='none';document.getElementById('dim').style.display='none';pendingCoord=null;}
+  }
+
+  function cancelPlace(){
+    placing=false;
+    const fab=document.getElementById('fab');
+    fab.textContent='+';fab.className='';
+    document.getElementById('place-hint').style.display='none';
+    document.getElementById('name-dialog').style.display='none';
+    document.getElementById('dim').style.display='none';
+    pendingCoord=null;
+  }
+
+  async function confirmPlace(){
+    const name=document.getElementById('sig-name').value.trim();
+    if(!name){showToast('이름을 입력해주세요');return;}
+    if(!pendingCoord){cancelPlace();return;}
+    const body={name,lat:pendingCoord.lat(),lng:pendingCoord.lng()};
+    const r=await fetch('/api/signals',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+    const data=await r.json();
+    addMarker(data.signal);
+    cancelPlace();
+    showToast(name+' 추가됐어요!');
   }
 
   function openPanel(sig){

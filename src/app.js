@@ -1,6 +1,6 @@
 import { createServer as createHttpServer } from "node:http";
 import { config } from "./config.js";
-import { getAllSignals, getSignalById } from "./services/signalsStore.js";
+import { getAllSignals, getSignalById, addSignal } from "./services/signalsStore.js";
 import { buildMapHtml } from "./services/mapHtml.js";
 import { calculateRemaining, updateCycle } from "./services/cycleCalculator.js";
 
@@ -54,6 +54,18 @@ const routeRequest = async (request, response, mapHtml) => {
 
   if (request.method === "GET" && url.pathname === "/api/signals") {
     writeJson(response, 200, { signals: getAllSignals() });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/signals") {
+    const body = await readBody(request);
+    const { name, lat, lng } = body;
+    if (!name || lat == null || lng == null) {
+      writeJson(response, 400, { error: { code: "INVALID_BODY", message: "name, lat, lng 필수" } });
+      return;
+    }
+    const signal = addSignal({ name, lat: Number(lat), lng: Number(lng) });
+    writeJson(response, 201, { signal });
     return;
   }
 
