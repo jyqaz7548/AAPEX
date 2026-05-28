@@ -2,16 +2,20 @@ import React, { useRef, useState } from 'react';
 import {
   View, StyleSheet, Animated, PanResponder, Dimensions, StatusBar,
 } from 'react-native';
-import { WebView } from 'react-native-webview';
+import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import HomeScreen from './screens/HomeScreen';
+import SignalModal from './components/SignalModal';
 import { MAP_URL } from './constants';
 
 const { height: H } = Dimensions.get('window');
 const EXPANDED_TOP = 80;
 const COLLAPSED_TOP = H - 220;
 
+interface SelectedSignal { itstId: string; name: string; }
+
 export default function App() {
   const [expanded, setExpanded] = useState(false);
+  const [selectedSignal, setSelectedSignal] = useState<SelectedSignal | null>(null);
   const isExpanded = useRef(false);
   const scrollY = useRef(0);
 
@@ -57,6 +61,15 @@ export default function App() {
     },
   })).current;
 
+  const handleMessage = (event: WebViewMessageEvent) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'markerClick') {
+        setSelectedSignal(data.signal);
+      }
+    } catch {}
+  };
+
   return (
     <View style={styles.root}>
       <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
@@ -66,6 +79,7 @@ export default function App() {
         javaScriptEnabled
         allowsInlineMediaPlayback
         originWhitelist={['*']}
+        onMessage={handleMessage}
       />
       {/* top 애니메이션 → 접힘 시 layout이 하단만 차지 → 지도 터치 통과 */}
       <Animated.View style={[styles.sheet, { top: sheetTop }]}>
@@ -79,6 +93,10 @@ export default function App() {
           />
         </View>
       </Animated.View>
+      <SignalModal
+        signal={selectedSignal}
+        onClose={() => setSelectedSignal(null)}
+      />
     </View>
   );
 }

@@ -89,7 +89,13 @@ export const buildMapHtml = (clientId) => `<!DOCTYPE html>
   function addMarker(sig){
     const m=new naver.maps.Marker({position:new naver.maps.LatLng(sig.lat,sig.lng),map,title:sig.name,
       icon:{content:'<div style="background:#007AFF;color:#fff;padding:4px 8px;border-radius:12px;font-size:12px;font-weight:700;white-space:nowrap;box-shadow:0 2px 4px rgba(0,0,0,.3)">'+sig.name+'</div>',anchor:new naver.maps.Point(0,28)}});
-    naver.maps.Event.addListener(m,'click',()=>openPanel(sig));
+    naver.maps.Event.addListener(m,'click',()=>{
+      if(window.ReactNativeWebView){
+        window.ReactNativeWebView.postMessage(JSON.stringify({type:'markerClick',signal:sig}));
+      } else {
+        openPanel(sig);
+      }
+    });
   }
 
   function openPanel(sig){
