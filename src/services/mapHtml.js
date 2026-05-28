@@ -111,6 +111,8 @@ export const buildMapHtml = (clientId) => `<!DOCTYPE html>
   let placing=false, pendingCoord=null;
 
   const map=new naver.maps.Map('map',{center:new naver.maps.LatLng(37.48327,127.0838),zoom:16,mapDataControl:false,scaleControl:false});
+  // RN 앱 환경에서는 네이티브 FAB 버튼 사용 → HTML FAB 숨김
+  if(window.ReactNativeWebView){document.getElementById('fab').style.display='none';}
 
   naver.maps.Event.addListener(map,'click',function(e){
     if(!placing)return;
@@ -155,6 +157,7 @@ export const buildMapHtml = (clientId) => `<!DOCTYPE html>
     document.getElementById('name-dialog').style.display='none';
     document.getElementById('dim').style.display='none';
     pendingCoord=null;
+    if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(JSON.stringify({type:'placingCancelled'}));}
   }
 
   async function confirmPlace(){

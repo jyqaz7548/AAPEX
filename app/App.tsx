@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import {
-  View, StyleSheet, Animated, PanResponder, Dimensions, StatusBar,
+  View, StyleSheet, Animated, PanResponder, Dimensions,
+  StatusBar, TouchableOpacity, Text,
 } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import HomeScreen from './screens/HomeScreen';
@@ -10,16 +11,18 @@ import { MAP_URL } from './constants';
 const { height: H } = Dimensions.get('window');
 const EXPANDED_TOP = 80;
 const COLLAPSED_TOP = H - 220;
+const SHEET_HEIGHT = H - COLLAPSED_TOP; // 220
 
 interface SelectedSignal { itstId: string; name: string; }
 
 export default function App() {
   const [expanded, setExpanded] = useState(false);
   const [selectedSignal, setSelectedSignal] = useState<SelectedSignal | null>(null);
+  const [fabActive, setFabActive] = useState(false);
   const isExpanded = useRef(false);
   const scrollY = useRef(0);
+  const webViewRef = useRef<WebView>(null);
 
-  // top을 직접 애니메이션 → 레이아웃이 실제로 이동 → 터치 영역도 함께 이동
   const sheetTop = useRef(new Animated.Value(COLLAPSED_TOP)).current;
   const curTop = useRef(COLLAPSED_TOP);
 
@@ -30,17 +33,15 @@ export default function App() {
     setExpanded(exp);
     Animated.spring(sheetTop, {
       toValue: target,
-      useNativeDriver: false, // top은 layout 속성 → native driver 불가
+      useNativeDriver: false,
       tension: 65,
       friction: 11,
     }).start();
   };
 
   const panResponder = useRef(PanResponder.create({
-    // 접힘 상태: 시트 어디서나 스와이프 캡처 (capture = ScrollView보다 먼저)
     onMoveShouldSetPanResponderCapture: (_, { dy }) =>
       !isExpanded.current && Math.abs(dy) > 8,
-    // 펼침 상태: 스크롤 최상단에서 아래로 당기면 접기
     onMoveShouldSetPanResponder: (_, { dy }) =>
       isExpanded.current && dy > 10 && scrollY.current <= 0,
     onPanResponderGrant: () => {
@@ -64,16 +65,22 @@ export default function App() {
   const handleMessage = (event: WebViewMessageEvent) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === 'markerClick') {
-        setSelectedSignal(data.signal);
-      }
+      if (data.type === 'markerClick') setSelectedSignal(data.signal);
+      if (data.type === 'placingCancelled') setFabActive(false);
     } catch {}
+  };
+
+  const toggleFab = () => {
+    const next = !fabActive;
+    setFabActive(next);
+    webViewRef.current?.injectJavaScript('togglePlace(); true;');
   };
 
   return (
     <View style={styles.root}>
       <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
       <WebView
+        ref={webViewRef}
         source={{ uri: MAP_URL }}
         style={StyleSheet.absoluteFill}
         javaScriptEnabled
@@ -81,7 +88,6 @@ export default function App() {
         originWhitelist={['*']}
         onMessage={handleMessage}
       />
-      {/* top 애니메이션 → 접힘 시 layout이 하단만 차지 → 지도 터치 통과 */}
       <Animated.View style={[styles.sheet, { top: sheetTop }]}>
         <View style={styles.inner} {...panResponder.panHandlers}>
           <View style={styles.handleWrap}>
@@ -93,6 +99,16 @@ export default function App() {
           />
         </View>
       </Animated.View>
+
+      {/* 시트 위에 떠 있는 신호등 추가 버튼 */}
+      <TouchableOpacity
+        style={[styles.fab, fabActive && styles.fabCancel]}
+        onPress={toggleFab}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.fabTxt}>{fabActive ? '✕' : '+'}</Text>
+      </TouchableOpacity>
+
       <SignalModal
         signal={selectedSignal}
         onClose={() => setSelectedSignal(null)}
@@ -120,4 +136,22 @@ const styles = StyleSheet.create({
   inner: { flex: 1 },
   handleWrap: { paddingTop: 10, paddingBottom: 6, alignItems: 'center' },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#d1d5db' },
+  fab: {
+    position: 'absolute',
+    bottom: SHEET_HEIGHT + 20, // 시트 상단 위 20px
+    right: 16,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  fabCancel: { backgroundColor: '#ef4444' },
+  fabTxt: { color: '#fff', fontSize: 28, lineHeight: 34, fontWeight: '400' },
 });
