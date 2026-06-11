@@ -1,6 +1,6 @@
 import { createServer as createHttpServer } from "node:http";
 import { config } from "./config.js";
-import { getAllSignals, getSignalById, addSignal } from "./services/signalsStore.js";
+import { getAllSignals, getSignalById, addSignal, removeSignal } from "./services/signalsStore.js";
 import { buildMapHtml } from "./services/mapHtml.js";
 import { calculateRemaining, updateCycle } from "./services/cycleCalculator.js";
 
@@ -31,7 +31,7 @@ const routeRequest = async (request, response, mapHtml) => {
   if (request.method === "OPTIONS") {
     response.writeHead(204, {
       "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET,POST,OPTIONS",
+      "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
       "access-control-allow-headers": "content-type"
     });
     response.end();
@@ -66,6 +66,18 @@ const routeRequest = async (request, response, mapHtml) => {
     }
     const signal = addSignal({ name, lat: Number(lat), lng: Number(lng) });
     writeJson(response, 201, { signal });
+    return;
+  }
+
+  const signalIdMatch = url.pathname.match(/^\/api\/signals\/([^/]+)$/);
+  if (request.method === "DELETE" && signalIdMatch) {
+    const itstId = signalIdMatch[1];
+    const ok = removeSignal(itstId);
+    if (!ok) {
+      writeJson(response, 404, { error: { code: "SIGNAL_NOT_FOUND", message: "신호 없음" } });
+      return;
+    }
+    writeJson(response, 200, { ok: true });
     return;
   }
 

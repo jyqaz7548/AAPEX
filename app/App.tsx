@@ -70,6 +70,10 @@ export default function App() {
     } catch {}
   };
 
+  const handleDelete = (itstId: string) => {
+    webViewRef.current?.injectJavaScript(`removeMarker('${itstId}'); true;`);
+  };
+
   const toggleFab = () => {
     const next = !fabActive;
     setFabActive(next);
@@ -112,6 +116,7 @@ export default function App() {
       <SignalModal
         signal={selectedSignal}
         onClose={() => setSelectedSignal(null)}
+        onDelete={handleDelete}
       />
     </View>
   );

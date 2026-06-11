@@ -17,3 +17,11 @@ export const addSignal = ({ name, lat, lng }) => {
   writeFileSync(filePath, JSON.stringify(signals, null, 2), "utf-8");
   return signal;
 };
+
+export const removeSignal = (itstId) => {
+  const idx = signals.findIndex((s) => s.itstId === itstId);
+  if (idx === -1) return false;
+  signals.splice(idx, 1);
+  writeFileSync(filePath, JSON.stringify(signals, null, 2), "utf-8");
+  return true;
+};

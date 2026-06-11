@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, Modal, TouchableOpacity, TextInput,
+  View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, Alert,
 } from 'react-native';
 import { API_BASE_URL } from '../constants';
 
@@ -16,6 +16,7 @@ interface Phase {
 interface Props {
   signal: Signal | null;
   onClose: () => void;
+  onDelete: (itstId: string) => void;
 }
 
 const fmt = (sec: number) => {
@@ -29,7 +30,7 @@ const nowKST = () => {
   return `${String(h).padStart(2,'0')}:${String(n.getUTCMinutes()).padStart(2,'0')}:${String(n.getUTCSeconds()).padStart(2,'0')}`;
 };
 
-export default function SignalModal({ signal, onClose }: Props) {
+export default function SignalModal({ signal, onClose, onDelete }: Props) {
   const [phase, setPhase] = useState<Phase | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [cycleInput, setCycleInput] = useState('');
@@ -89,6 +90,24 @@ export default function SignalModal({ signal, onClose }: Props) {
     setShowSettings(false);
   };
 
+  const handleDelete = () => {
+    Alert.alert(
+      '신호등 삭제',
+      `"${signal?.name}"을(를) 삭제할까요?`,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제', style: 'destructive',
+          onPress: async () => {
+            await fetch(`${API_BASE_URL}/api/signals/${signal!.itstId}`, { method: 'DELETE' });
+            onDelete(signal!.itstId);
+            onClose();
+          },
+        },
+      ],
+    );
+  };
+
   const isGreen = phase?.status === 'green';
   const total = phase ? (isGreen ? phase.greenSeconds : phase.cycleSeconds - phase.greenSeconds) : 1;
   const pct = phase ? Math.min(100, (phase.remainingSeconds / total) * 100) : 0;
@@ -101,6 +120,9 @@ export default function SignalModal({ signal, onClose }: Props) {
           {/* 헤더 */}
           <View style={s.header}>
             <Text style={s.title} numberOfLines={1}>{signal?.name}</Text>
+            <TouchableOpacity onPress={handleDelete} style={s.deleteBtn}>
+              <Text style={s.deleteTxt}>🗑️</Text>
+            </TouchableOpacity>
             <TouchableOpacity onPress={onClose} style={s.closeBtn}>
               <Text style={s.closeTxt}>✕</Text>
             </TouchableOpacity>
@@ -173,6 +195,8 @@ const s = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 20, padding: 20 },
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   title: { flex: 1, fontSize: 17, fontWeight: '700', color: '#111' },
+  deleteBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', marginRight: 8 },
+  deleteTxt: { fontSize: 13 },
   closeBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#e5e7eb', alignItems: 'center', justifyContent: 'center' },
   closeTxt: { fontSize: 12, color: '#666' },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 12 },

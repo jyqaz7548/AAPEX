@@ -109,6 +109,7 @@ export const buildMapHtml = (clientId) => `<!DOCTYPE html>
 <script>
   let currentId=null, refreshTimer=null, cycleInfo={cycleSeconds:170,greenSeconds:40};
   let placing=false, pendingCoord=null;
+  const markerMap={}; // itstId → naver.maps.Marker
 
   const map=new naver.maps.Map('map',{center:new naver.maps.LatLng(37.48327,127.0838),zoom:16,mapDataControl:false,scaleControl:false});
   // RN 앱 환경에서는 네이티브 FAB 버튼 사용 → HTML FAB 숨김
@@ -131,6 +132,7 @@ export const buildMapHtml = (clientId) => `<!DOCTYPE html>
   function addMarker(sig){
     const m=new naver.maps.Marker({position:new naver.maps.LatLng(sig.lat,sig.lng),map,title:sig.name,
       icon:{content:'<div style="background:#007AFF;color:#fff;padding:4px 8px;border-radius:12px;font-size:12px;font-weight:700;white-space:nowrap;box-shadow:0 2px 4px rgba(0,0,0,.3)">'+sig.name+'</div>',anchor:new naver.maps.Point(0,28)}});
+    markerMap[sig.itstId]=m;
     naver.maps.Event.addListener(m,'click',()=>{
       if(window.ReactNativeWebView){
         window.ReactNativeWebView.postMessage(JSON.stringify({type:'markerClick',signal:sig}));
@@ -138,6 +140,10 @@ export const buildMapHtml = (clientId) => `<!DOCTYPE html>
         openPanel(sig);
       }
     });
+  }
+
+  function removeMarker(itstId){
+    if(markerMap[itstId]){markerMap[itstId].setMap(null);delete markerMap[itstId];}
   }
 
   function togglePlace(){
